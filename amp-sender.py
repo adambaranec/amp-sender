@@ -10,14 +10,12 @@ import tkinter as tk
 
 from tkinter import ttk
 
-server_bezi = False 
+app = tk.Tk()
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # TCP
+def close():
+ app.destroy()
 
-app = tk.Tk() 
-
-app.geometry("100x100")
-
+app.protocol("WM_DELETE_WINDOW", close)
 
 # Získanie rozmerov obrazovky
 screen_width = app.winfo_screenwidth()
@@ -35,6 +33,17 @@ center_y = int((screen_height - window_height) / 2)
 app.geometry(f"+{center_x}+{center_y}")
 
 app.title("Amp Sender") 
+
+server_type = tk.StringVar()
+
+types = ['UDP','TCP']
+
+server_type_settings = tk.ttk.Combobox(app, textvariable=server_type, values=types, state='readonly', width=int(window_width/100))
+server_type_settings.set('TCP')
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # TCP as default
+
+FPS = 60
 
 def devices():
   devs = sd.query_devices()
@@ -56,67 +65,103 @@ chosen_device = tk.StringVar()
 
 devicesList = tk.ttk.Combobox(app, values=devices(), textvariable=chosen_device, state="readonly")
 
-status = tk.Text(app, height=1, width=400)
+status = tk.Text(app, height=1, width=window_width, bg='gray')
+status.tag_configure("center", justify='center')
+
+server_runs = False
 
 def connect(host, port): 
-    global server
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    with server as s: 
-        s.bind((host, int(port))) 
-        s.listen() 
+        # UDP server
+        """
+        global server_runs
+        global server
+        server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server.bind((host, int(port))) 
         status.delete('1.0', tk.END)
         status.insert(tk.END, "Server running on " + host + " and port " + str(port))
+        status.configure(state=tk.DISABLED)
         status.pack()
-        conn, addr = s.accept()
-        server_bezi = True 
-        with conn: 
-          status.insert(tk.END, "\nClient connected with " + str(addr))
-          if chosen_device.get() != '':
-           threading.Thread(target=send, args=(conn,chosen_device)).start()
-          else:
-           status.insert(tk.END, "\nNo device chosen")   
-        """while True:
-            try:
-                conn, addr = s.accept() 
-                with conn: 
-                 status.insert(tk.END, "\nClient connected with " + str(addr))
-                 server_bezi = True 
-                 threading.Thread(target=send, args=(conn,chosen_device)).start()
-            except socket.error as e:
-                status.delete('1.0', tk.END)
-                status.insert(tk.END, e)"""
+        server_runs = True
+        while server_runs:
+            data, addr = server.recvfrom(1024)  
+            if chosen_device.get() != "":
+             send(server,chosen_device.get(),addr)
+            else:
+             status.configure(state=tk.NORMAL)
+             status.insert(tk.END, "\nNo device chosen")
+             status.configure(state=tk.DISABLED)"""
+        # TCP server
+        global server
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        with server as s: 
+         s.bind((host, int(port))) 
+         s.listen(0)
+         status.delete('1.0', tk.END)
+         status.insert(tk.END, "Server running on " + host + " and port " + str(port))
+         status.configure(state=tk.DISABLED)
+         status.pack()
+         conn, addr = s.accept()
+         with conn: 
+          try:
+           status.configure(state=tk.NORMAL)
+           status.insert(tk.END, "\nClient connected from " + str(addr[0]) + " and port " + str(addr[1]))
+           status.configure(state=tk.DISABLED)
+           if chosen_device.get() != '':
+            threading.Thread(target=send, args=(conn,chosen_device.get())).start()
+           else:
+            status.insert(tk.END, "\nNo device chosen")
+          except ConnectionAbortedError:
+             conn.close()
+               
 
-def send(connection,device): 
-            while server_bezi: 
-                audio = sd.rec(1, samplerate=44100, channels=2, dtype=np.float32,device=device) 
-                sd.wait() 
-                amplituda = audio[0]+1.0/2.0 
-                connection.sendall(str(amplituda).encode('utf-8')) 
-                threading.Timer(float(1/60), send, args=(connection,device)).start()
-            
+# send - UDP server
+"""def send(server,device,addr): 
+            global FPS
+            audio = sd.rec(1, samplerate=44100, channels=2, dtype=np.float32,device=device) 
+            sd.wait() 
+            amplituda = np.mean(audio[0])
+            server.sendto(str(amplituda).encode('utf-8'), addr)
+            threading.Timer(float(1/FPS), send, args=(server,device,addr)).start()"""
+# send - TCP server
+def send(connection,device):
+            global FPS
+            audio = sd.rec(1, samplerate=44100, channels=2, dtype=np.float32,device=device) 
+            sd.wait() 
+            amplituda = np.mean(audio[0])
+            connection.sendall(str(amplituda).encode('utf-8'))
+            threading.Timer(float(1/FPS), send, args=(connection,device)).start()
+
+
 
 def start_server(): 
-    threading.Thread(target=connect, args=(ipOut.get(),int(portOut.get()))).start()
+    handler = threading.Thread(target=connect, args=(ipOut.get(),int(portOut.get())))
+    handler.start()
+    threading.Timer(10.0, lambda: handler.stop())
 
 def stop_server(): 
-    global server_bezi 
-    server_bezi = False 
     global server
+    global server_runs
+    server_runs = False
     server.close()
     status.delete('1.0', tk.END)
     status.pack_forget()
-    """try:
-        server.shutdown(socket.SHUT_RDWR)
-        server.close()
-        status.delete('1.0', tk.END)
-    except Exception as e:
-         status.delete('1.0', tk.END)
-         status.insert(tk.END, e)"""
     
 
 start_button = tk.Button(app, text="Start", command=start_server)
 
 stop_button = tk.Button(app, text="Stop", command=stop_server)
+
+fps = tk.StringVar()
+
+def set_fps(*args):
+  global FPS
+  if fps.get() != '' and int(fps.get()) > 9:
+   FPS = fps.get()
+
+fps.trace("w", set_fps)
+fps_label = tk.Label(text="FPS")
+fps_settings = tk.Entry(app, textvariable=fps, width=int(window_width/120), justify="center")
+fps_settings.insert(tk.END,'60')
 
 devicesList.pack()
 ipOutLabel.pack()
@@ -125,6 +170,9 @@ portOutLabel.pack()
 portOut.pack()
 start_button.pack()
 stop_button.pack()
+fps_label.pack()
+fps_settings.pack()
+server_type_settings.pack()
 app.mainloop() 
 
 """def control(): 
