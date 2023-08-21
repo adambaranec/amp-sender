@@ -10,6 +10,8 @@ import tkinter as tk
 
 from tkinter import ttk
 
+import pythonosc as pyosc
+
 app = tk.Tk()
 
 def close():
@@ -33,15 +35,6 @@ center_y = int((screen_height - window_height) / 2)
 app.geometry(f"+{center_x}+{center_y}")
 
 app.title("Amp Sender") 
-
-server_type = tk.StringVar()
-
-types = ['UDP','TCP']
-
-server_type_settings = tk.ttk.Combobox(app, textvariable=server_type, values=types, state='readonly', width=int(window_width/100))
-server_type_settings.set('TCP')
-
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # TCP as default
 
 FPS = 60
 
@@ -68,88 +61,15 @@ devicesList = tk.ttk.Combobox(app, values=devices(), textvariable=chosen_device,
 status = tk.Text(app, height=1, width=window_width, bg='gray')
 status.tag_configure("center", justify='center')
 
-server_runs = False
-
-def connect(host, port): 
-        # UDP server
-        """
-        global server_runs
-        global server
-        server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        server.bind((host, int(port))) 
-        status.delete('1.0', tk.END)
-        status.insert(tk.END, "Server running on " + host + " and port " + str(port))
-        status.configure(state=tk.DISABLED)
-        status.pack()
-        server_runs = True
-        while server_runs:
-            data, addr = server.recvfrom(1024)  
-            if chosen_device.get() != "":
-             send(server,chosen_device.get(),addr)
-            else:
-             status.configure(state=tk.NORMAL)
-             status.insert(tk.END, "\nNo device chosen")
-             status.configure(state=tk.DISABLED)"""
-        # TCP server
-        global server
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        with server as s: 
-         s.bind((host, int(port))) 
-         s.listen(0)
-         status.delete('1.0', tk.END)
-         status.insert(tk.END, "Server running on " + host + " and port " + str(port))
-         status.configure(state=tk.DISABLED)
-         status.pack()
-         conn, addr = s.accept()
-         with conn: 
-          try:
-           status.configure(state=tk.NORMAL)
-           status.insert(tk.END, "\nClient connected from " + str(addr[0]) + " and port " + str(addr[1]))
-           status.configure(state=tk.DISABLED)
-           if chosen_device.get() != '':
-            threading.Thread(target=send, args=(conn,chosen_device.get())).start()
-           else:
-            status.insert(tk.END, "\nNo device chosen")
-          except ConnectionAbortedError:
-             conn.close()
-               
-
-# send - UDP server
-"""def send(server,device,addr): 
-            global FPS
-            audio = sd.rec(1, samplerate=44100, channels=2, dtype=np.float32,device=device) 
-            sd.wait() 
-            amplituda = np.mean(audio[0])
-            server.sendto(str(amplituda).encode('utf-8'), addr)
-            threading.Timer(float(1/FPS), send, args=(server,device,addr)).start()"""
-# send - TCP server
-def send(connection,device):
-            global FPS
-            audio = sd.rec(1, samplerate=44100, channels=2, dtype=np.float32,device=device) 
-            sd.wait() 
-            amplituda = np.mean(audio[0])
-            connection.sendall(str(amplituda).encode('utf-8'))
-            threading.Timer(float(1/FPS), send, args=(connection,device)).start()
-
-
-
-def start_server(): 
-    handler = threading.Thread(target=connect, args=(ipOut.get(),int(portOut.get())))
-    handler.start()
-    threading.Timer(10.0, lambda: handler.stop())
-
-def stop_server(): 
-    global server
-    global server_runs
-    server_runs = False
-    server.close()
-    status.delete('1.0', tk.END)
-    status.pack_forget()
+def send(device,host,port):
+  amp = sd.rec(1,44100, 2, np.float32)
+  amp.wait()
+  pass
     
 
-start_button = tk.Button(app, text="Start", command=start_server)
+start_button = tk.Button(app, text="Start")
 
-stop_button = tk.Button(app, text="Stop", command=stop_server)
+stop_button = tk.Button(app, text="Stop")
 
 fps = tk.StringVar()
 
@@ -172,14 +92,5 @@ start_button.pack()
 stop_button.pack()
 fps_label.pack()
 fps_settings.pack()
-server_type_settings.pack()
 app.mainloop() 
-
-"""def control(): 
- try:
-    with socket.create_connection((ipOut.get(),int(portOut.get())), timeout=1):
-        print("Server works")
- except socket.error:
-       print("Does not work")
- threading.Timer(2, control).start()"""
 
