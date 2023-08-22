@@ -77,6 +77,11 @@ server_type = tk.StringVar()
 server_type_settings = tk.ttk.Combobox(app, values=['UDP', 'WebSocket'], state="readonly", textvariable=server_type, width=int(window_width/80), justify="center")
 server_type_settings.set('UDP')
 
+create_server = tk.BooleanVar()
+create_server.set(True)
+
+create_server_checkbox = tk.Checkbutton(app, text="Create internal server", variable=create_server)
+
 
 def start():
    global MODE
@@ -87,8 +92,10 @@ def start():
      match MODE:
       case 'UDP':
        client_udp = udp_client.SimpleUDPClient(HOST.get(), int(PORT.get()))
-       server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())), dispatcher)
        send(chosen_device.get(),client_udp)
+       if create_server.get() == True:
+        server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())), dispatcher)  
+        threading.Thread(target=server_udp.serve_forever).start()
       case 'WebSocket':
        threading.Thread(target=init_ws).start()
        # Just to differentiate between UDP and WebSocket ports are just subtracted by one
@@ -96,13 +103,15 @@ def start():
        server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())-1), dispatcher)
        dispatcher.map("/amp", ws_send)
        send(chosen_device.get(),client_udp)
-     threading.Thread(target=server_udp.serve_forever).start()
+       threading.Thread(target=server_udp.serve_forever).start()  
+       if create_server.get() == True:
+        threading.Thread(target=init_ws).start()
      status.delete('1.0', tk.END)
      status.insert(tk.END, f"Sending to {MODE} {HOST.get()} and port {PORT.get()}\n", "center")
      status.pack()
-    except OSError:
+    except Exception as e:
      status.delete('1.0', tk.END)
-     status.insert(tk.END, "To send amplitude to external servers, IP should be 0.0.0.0 or your address online.", "center")
+     status.insert(tk.END, f"Exception: {e}", "center")
      status.pack() 
    else:
     status.delete('1.0', tk.END)
@@ -159,5 +168,6 @@ stop_button.pack()
 fps_label.pack()
 fps_settings.pack()
 server_type_settings.pack()
+create_server_checkbox.pack()
 app.mainloop() 
 
