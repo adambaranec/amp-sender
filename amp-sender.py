@@ -29,8 +29,8 @@ app.protocol("WM_DELETE_WINDOW", close)
 screen_width = app.winfo_screenwidth()
 screen_height = app.winfo_screenheight()
 
-window_width = int(screen_width / 4)
-window_height = int(screen_height / 4)
+window_width = int(screen_width / 2)
+window_height = int(screen_height / 2)
 app.geometry(f"{window_width}x{window_height}")
 
 # Výpočet súradníc pre umiestnenie okna do stredu obrazovky
@@ -78,7 +78,7 @@ server_type_settings = tk.ttk.Combobox(app, values=['UDP', 'WebSocket'], state="
 server_type_settings.set('UDP')
 
 create_server = tk.BooleanVar()
-create_server.set(True)
+create_server.set(False)
 
 create_server_checkbox = tk.Checkbutton(app, text="Create internal server", variable=create_server)
 
