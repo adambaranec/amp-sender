@@ -18,19 +18,22 @@ from pythonosc.dispatcher import Dispatcher
 
 from pythonosc import osc_server
 
+import json
+
+import time
+
+is_sending = False
+udp_running = False
+ws_running = False
+
 app = tk.Tk()
-
-def close():
- app.destroy()
-
-app.protocol("WM_DELETE_WINDOW", close)
 
 # Získanie rozmerov obrazovky
 screen_width = app.winfo_screenwidth()
 screen_height = app.winfo_screenheight()
 
-window_width = int(screen_width / 2)
-window_height = int(screen_height / 2)
+window_width = 500
+window_height = 300
 app.geometry(f"{window_width}x{window_height}")
 
 # Výpočet súradníc pre umiestnenie okna do stredu obrazovky
@@ -70,11 +73,11 @@ chosen_device = tk.StringVar()
 devicesList = tk.ttk.Combobox(app, values=devices(), textvariable=chosen_device, state="readonly")
 devicesList.set(devices()[0])
 
-status = tk.Text(app, height=1, width=window_width, bg='gray')
+status = tk.Text(app, height=3, width=60, bg='gray')
 status.tag_configure("center", justify='center')
 
 server_type = tk.StringVar()
-server_type_settings = tk.ttk.Combobox(app, values=['UDP', 'WebSocket'], state="readonly", textvariable=server_type, width=int(window_width/80), justify="center")
+server_type_settings = tk.ttk.Combobox(app, values=['UDP', 'WebSocket'], state="readonly", textvariable=server_type, width=9, justify="center")
 server_type_settings.set('UDP')
 
 create_server = tk.BooleanVar()
@@ -82,69 +85,110 @@ create_server.set(False)
 
 create_server_checkbox = tk.Checkbutton(app, text="Create internal server", variable=create_server)
 
-
 def start():
    global MODE
+   global is_sending
+   global udp_running
+   global ws_running
    MODE = server_type.get()
    if PORT.get() != '': 
     try:
+     is_sending = True
      dispatcher = Dispatcher()
      match MODE:
       case 'UDP':
        client_udp = udp_client.SimpleUDPClient(HOST.get(), int(PORT.get()))
        send(chosen_device.get(),client_udp)
        if create_server.get() == True:
-        server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())), dispatcher)  
-        threading.Thread(target=server_udp.serve_forever).start()
-      case 'WebSocket':
+        udp_running = True
+        server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())), dispatcher)
+        serve(server_udp)
+      case 'WebSocket': 
+       ws_running = True
+       ws = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       serve(ws)
+       '''      import json
+       import time
+       message = {'address': '/amp', 'args': [float(1)]}
+       client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       client.connect((HOST.get(), int(PORT.get())))
+       client.sendall(json.dumps(message).encode('utf-8'))
        threading.Thread(target=init_ws).start()
        # Just to differentiate between UDP and WebSocket ports are just subtracted by one
+       udp_running = True
        client_udp = udp_client.SimpleUDPClient(HOST.get(), int(PORT.get())-1)
-       server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())-1), dispatcher)
-       dispatcher.map("/amp", ws_send)
+       is_sending = True
        send(chosen_device.get(),client_udp)
-       threading.Thread(target=server_udp.serve_forever).start()  
        if create_server.get() == True:
-        threading.Thread(target=init_ws).start()
+         server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())-1), dispatcher)
+         serve(server_udp)
+         ws_thread = threading.Thread(target=init_ws)
+         ws_thread.start()'''
      status.delete('1.0', tk.END)
-     status.insert(tk.END, f"Sending to {MODE} {HOST.get()} and port {PORT.get()}\n", "center")
+     status.insert(tk.END, f"Configured to {MODE} {HOST.get()} and port {PORT.get()}\nWaiting for a client...", "center")
      status.pack()
     except Exception as e:
      status.delete('1.0', tk.END)
-     status.insert(tk.END, f"Exception: {e}", "center")
+     status.insert(tk.END, e, "center")
      status.pack() 
    else:
     status.delete('1.0', tk.END)
     status.insert(tk.END, "Cannot send amplitude without port\n", "center")
     status.pack() 
+  
+def serve(server):
+  if isinstance(server, osc_server.ThreadingOSCUDPServer):
+   global udp_running
+   if udp_running == True: 
+    threading.Thread(target=server.serve_forever).start()
+   else:
+    server.server_close()
+  elif isinstance(server, socket.socket):
+    global ws_running
+    if ws_running == True:
+      threading.Thread(target=init_ws).start()
+    else:
+      server.close()
 
 def init_ws():
-    ws_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    ws_server.bind((HOST.get(), int(PORT.get())))
-    ws_server.listen()
-    while True:
-     client, addr = ws_server.accept()
-     data = client.recv(2048)
+ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+ server.bind((HOST.get(), int(PORT.get())))
+ server.listen()
+ server.settimeout(60)
+ conn, addr = server.accept()
+ status.delete('1.0', tk.END)
+ status.insert(tk.END, f"Client connected to {addr[0]} on port {addr[1]}", "center")
+ send(chosen_device.get(),conn)
 
-
-def ws_send(addr,*args):
-  import json
-  message = {'address': addr, 'args': list(args)}
-  ws = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  ws.connect((HOST.get(), int(PORT.get())))
-  ws.sendall(json.dumps(message).encode('utf-8'))
 
 def send(input_device,client):
   global FPS
-  sample = sd.rec(1, 44100, 2, np.float32, device=input_device)
-  amp = np.mean(sample[0])
-  client.send_message("/amp", float(amp))
-  threading.Timer(1/FPS, send, [input_device,client]).start()
+  global MODE
+  global is_sending
+  if is_sending == True:
+   sample = sd.rec(1, 44100, 2, np.float32, device=input_device)
+   amp = np.mean(sample[0])
+   match MODE:
+    case 'UDP':
+     client.send_message("/amp", float(amp))
+    case 'WebSocket':
+     message = {'address': '/amp', 'args': [float(amp)]}
+     client.send(json.dumps(message).encode('utf-8'))  
+   threading.Timer(1/FPS, send, [input_device,client]).start()
+
+def close():
+  global is_sending
+  global udp_running
+  global ws_running
+  is_sending = False
+  udp_running = False
+  ws_running = False
+  app.destroy()  
+
+app.protocol("WM_DELETE_WINDOW", close)
     
 
-start_button = tk.Button(app, text="Start", command=start)
-
-stop_button = tk.Button(app, text="Stop")
+start_button = tk.Button(app, text="Start sending", command=start)
 
 fps = tk.StringVar()
 
@@ -155,7 +199,7 @@ def set_fps(*args):
 
 fps.trace("w", set_fps)
 fps_label = tk.Label(text="FPS")
-fps_settings = tk.Entry(app, textvariable=fps, width=int(window_width/120), justify="center")
+fps_settings = tk.Entry(app, textvariable=fps, width=4, justify="center")
 fps_settings.insert(tk.END,'60')
 
 devicesList.pack()
@@ -164,10 +208,8 @@ ipOut.pack()
 portOutLabel.pack()
 portOut.pack()
 start_button.pack()
-stop_button.pack()
 fps_label.pack()
 fps_settings.pack()
 server_type_settings.pack()
-create_server_checkbox.pack()
 app.mainloop() 
 
