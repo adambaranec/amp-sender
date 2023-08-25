@@ -2,7 +2,9 @@ import sounddevice as sd
 
 import numpy as np 
 
-import socket 
+import asyncio
+
+import websockets as ws
 
 import threading 
 
@@ -82,7 +84,6 @@ server_type_settings.set('UDP')
 
 create_server = tk.BooleanVar()
 create_server.set(False)
-
 create_server_checkbox = tk.Checkbutton(app, text="Create internal server", variable=create_server)
 
 def start():
@@ -94,38 +95,26 @@ def start():
    if PORT.get() != '': 
     try:
      is_sending = True
-     dispatcher = Dispatcher()
+     #dispatcher = Dispatcher()
      match MODE:
       case 'UDP':
        client_udp = udp_client.SimpleUDPClient(HOST.get(), int(PORT.get()))
        send(chosen_device.get(),client_udp)
-       if create_server.get() == True:
+       '''if create_server.get() == True:
         udp_running = True
         server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())), dispatcher)
-        serve(server_udp)
+        serve(server_udp)'''
       case 'WebSocket': 
        ws_running = True
-       ws = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-       serve(ws)
-       '''      import json
-       import time
-       message = {'address': '/amp', 'args': [float(1)]}
-       client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-       client.connect((HOST.get(), int(PORT.get())))
-       client.sendall(json.dumps(message).encode('utf-8'))
-       threading.Thread(target=init_ws).start()
-       # Just to differentiate between UDP and WebSocket ports are just subtracted by one
-       udp_running = True
-       client_udp = udp_client.SimpleUDPClient(HOST.get(), int(PORT.get())-1)
-       is_sending = True
-       send(chosen_device.get(),client_udp)
+       init_ws()
+       '''
        if create_server.get() == True:
          server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())-1), dispatcher)
          serve(server_udp)
          ws_thread = threading.Thread(target=init_ws)
          ws_thread.start()'''
      status.delete('1.0', tk.END)
-     status.insert(tk.END, f"Configured to {MODE} {HOST.get()} and port {PORT.get()}\nWaiting for a client...", "center")
+     status.insert(tk.END, f"Sending to {MODE} {HOST.get()} and port {PORT.get()}", "center")
      status.pack()
     except Exception as e:
      status.delete('1.0', tk.END)
@@ -143,25 +132,24 @@ def serve(server):
     threading.Thread(target=server.serve_forever).start()
    else:
     server.server_close()
-  elif isinstance(server, socket.socket):
-    global ws_running
-    if ws_running == True:
-      threading.Thread(target=init_ws).start()
-    else:
-      server.close()
 
 def init_ws():
- server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
- server.bind((HOST.get(), int(PORT.get())))
- server.listen()
- server.settimeout(60)
- conn, addr = server.accept()
- status.delete('1.0', tk.END)
- status.insert(tk.END, f"Client connected to {addr[0]} on port {addr[1]}", "center")
- send(chosen_device.get(),conn)
+ async def handler(websocket, path):
+  ip, port = websocket.remote_address
+  status.insert(tk.END, f"\nClient connected from {ip} and port {port}", "center")
+  try:
+   await send(chosen_device.get(),websocket)
+  except Exception as e:
+   status.delete('1.0', tk.END)
+   status.insert(tk.END, f"Server log: {e}", "center")
 
+ global is_sending
+ is_sending = True
+ start_server = ws.serve(handler, HOST.get(), int(PORT.get()))
+ asyncio.get_event_loop().run_until_complete(start_server)
+ threading.Thread(target=asyncio.get_event_loop().run_forever).start()  
 
-def send(input_device,client):
+async def send(input_device,client):
   global FPS
   global MODE
   global is_sending
@@ -173,8 +161,13 @@ def send(input_device,client):
      client.send_message("/amp", float(amp))
     case 'WebSocket':
      message = {'address': '/amp', 'args': [float(amp)]}
-     client.send(json.dumps(message).encode('utf-8'))  
-   threading.Timer(1/FPS, send, [input_device,client]).start()
+     try:
+      await client.send(json.dumps(message).encode('utf-8'))
+     except Exception as e:
+      status.delete('1.0', tk.END)
+      status.insert(tk.END, f"Client log: {e}", "center")
+  time.sleep(1/FPS)
+  await send(input_device,client)
 
 def close():
   global is_sending

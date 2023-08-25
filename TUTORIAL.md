@@ -1,3 +1,4 @@
+## Tips
 - If you would like to capture everything what sounds through speakers, install a virtual audio cable and configure it.
 - To try these connections, in Amp Sender disable the checkbox "Create internal server".
 
