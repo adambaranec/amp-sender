@@ -186,7 +186,7 @@ async def ws_send(input_device,client):
       status.delete('1.0', tk.END)
       status.insert(tk.END, f"Client log: {e}", "center")
   time.sleep(1/FPS)
-  await send(input_device,client)
+  await ws_send(input_device,client)
 
 def close():
   global is_sending
