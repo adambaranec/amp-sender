@@ -101,7 +101,7 @@ def start():
      match MODE:
       case 'UDP':
        client_udp = udp_client.SimpleUDPClient(HOST.get(), int(PORT.get()))
-       send(chosen_device.get(),client_udp)
+       udp_send(chosen_device.get(),client_udp)
        '''if create_server.get() == True:
         udp_running = True
         server_udp = osc_server.ThreadingOSCUDPServer((HOST.get(), int(PORT.get())), dispatcher)
@@ -140,7 +140,7 @@ def init_ws():
   ip, port = websocket.remote_address
   status.insert(tk.END, f"\nClient connected from {ip} and port {port}", "center")
   try:
-   await send(chosen_device.get(),websocket)
+   await ws_send(chosen_device.get(),websocket)
   except Exception as e:
    status.delete('1.0', tk.END)
    status.insert(tk.END, f"Server log: {e}", "center")
@@ -151,7 +151,24 @@ def init_ws():
  asyncio.get_event_loop().run_until_complete(start_server)
  threading.Thread(target=asyncio.get_event_loop().run_forever).start()  
 
-async def send(input_device,client):
+def udp_send(input_device,client):
+  global FPS
+  global MODE
+  global is_sending
+  if is_sending == True:
+   sample = sd.rec(1, 44100, 2, np.float32, device=input_device)
+   amp = np.mean(sample[0])
+   match MODE:
+    case 'UDP':
+     try:
+      client.send_message("/amp", float(amp))
+     except Exception as e:
+      status.delete('1.0', tk.END)
+      status.insert(tk.END, f"Client log: {e}", "center")
+  time.sleep(1/FPS)
+  udp_send(input_device,client)
+
+async def ws_send(input_device,client):
   global FPS
   global MODE
   global is_sending
