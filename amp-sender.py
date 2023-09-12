@@ -22,6 +22,10 @@ from pythonosc.dispatcher import Dispatcher
 
 from pythonosc import osc_server
 
+from pythonosc import osc_message_builder
+
+from pythonosc import osc_bundle_builder
+
 import json
 
 import time
@@ -179,12 +183,15 @@ async def ws_send(input_device,client):
     case 'UDP':
      client.send_message("/amp", float(amp))
     case 'WebSocket':
-     message = {'address': '/amp', 'args': [float(amp)]}
      try:
-      await client.send(json.dumps(message).encode('utf-8'))
+      msg = osc_message_builder.OscMessageBuilder(address = "/amp")
+      msg.add_arg(float(amp))
+      msg = msg.build()
+      bytes = msg.dgram
+      await client.send(bytes)
      except Exception as e:
       status.delete('1.0', tk.END)
-      status.insert(tk.END, f"Client log: {e}", "center")
+      status.insert(tk.END, f"Client log: {e}", "center") 
   time.sleep(1/FPS)
   await ws_send(input_device,client)
 

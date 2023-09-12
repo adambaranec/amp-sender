@@ -1,14 +1,14 @@
-## Tips
-- If you would like to capture everything what sounds through speakers, install a virtual audio cable and configure it.
-- To try these connections, in Amp Sender disable the checkbox "Create internal server".
+## How to use
+- When starting the app, choose an input from the list to record from (e.g. microphone).
+- If you would like to record everything which sounds from your device, make necessary sound connections (for example in Linux) or simply configure a virtual audio cable. Then, choose the virtual cable as the input in Amp Sender.
 
 ## Using Amp Sender with Hydra (overall JavaScript)
 Hydra itself is able to capture sound, but only from the default built-in microphone. In case of a custom device, read further.
 
-- In the app, set port to 8080.
+- In Amp Sender, set the WebSocket connection type and port to 8080.
 - Copy this code to the Hydra editor:
 ```
-await loadScript("https://cdn.jsdelivr.net/npm/osc-js@2.4.0/lib/osc.min.js")
+await loadScript("https://cdn.jsdelivr.net/gh/ojack/hydra-osc/lib/osc.min.js")
 
 _osc = new OSC()
 _osc.open()
@@ -22,8 +22,8 @@ Example:
 ```
 shape(100).scale(()=>amp).out()
 ```
-## Custom connection
-Make sure the programming language (or environment) you set up the visualizer in provides libraries or support for OSC (Open Sound Control). Implement a way to listen to incoming messages from Amp Sender - depends on the library you use.
+## Custom connection (e.g. Processing, Python, openFrameworks etc.)
+Make sure the programming language (or environment, software) you set up visualizations in provides libraries or support for OSC (Open Sound Control). Implement a way to listen to incoming messages from Amp Sender on the address '/amp' - depends on the library you use.
 ## Sending volume to other devices
 Before setting things up:
 - All devices to send messages including yours must be connected to the same network
