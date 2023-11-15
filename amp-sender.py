@@ -131,13 +131,13 @@ def start():
     status.insert(tk.END, "Cannot send amplitude without port\n", "center")
     status.pack() 
   
-def serve(server):
+'''def serve(server):
   if isinstance(server, osc_server.ThreadingOSCUDPServer):
    global udp_running
    if udp_running == True: 
     threading.Thread(target=server.serve_forever).start()
    else:
-    server.server_close()
+    server.server_close()'''
 
 def init_ws():
  async def handler(websocket, path):
@@ -160,8 +160,8 @@ def udp_send(input_device,client):
   global MODE
   global is_sending
   if is_sending == True:
-   sample = sd.rec(1, 44100, 2, np.float32, device=input_device)
-   amp = np.mean(sample[0])
+   sample = sd.rec(1, 44100, 1, np.float32, device=input_device)
+   amp = sample[0][0]
    match MODE:
     case 'UDP':
      try:
@@ -177,8 +177,8 @@ async def ws_send(input_device,client):
   global MODE
   global is_sending
   if is_sending == True:
-   sample = sd.rec(1, 44100, 2, np.float32, device=input_device)
-   amp = np.mean(sample[0])
+   sample = sd.rec(1, 44100, 1, np.float32, device=input_device)
+   amp = sample[0][0]
    match MODE:
     case 'UDP':
      client.send_message("/amp", float(amp))
