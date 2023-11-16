@@ -3,7 +3,7 @@
 - If you would like to record everything which sounds from your device, make necessary sound connections (for example in Linux) or simply configure a virtual audio cable. Then, choose the virtual cable as the input in Amp Sender.
 
 ## Using Amp Sender with Hydra (overall JavaScript)
-Hydra itself is able to capture sound, but only from the default built-in microphone. In case of a custom device, read further.
+Hydra itself is able to capture sound, but only from the default built-in microphone. In the case of a custom device, read further.
 
 - In Amp Sender, set the WebSocket connection type and port to 8080.
 - Copy this code to the Hydra editor:
