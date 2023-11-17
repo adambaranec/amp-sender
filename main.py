@@ -1,14 +1,13 @@
 import asyncio
 import json
 import numpy as np
-from pythonosc import udp_client, osc_server, osc_message_builder
-import time
+from pythonosc import udp_client, osc_server, osc_message_builder, dispatcher
+import time as t
 import threading
 import tkinter as tk
 from tkinter import ttk
 import sounddevice as sd 
 import websockets as ws
-from websockets.legacy.server import WebSocketServerProtocol
 
 def devices():
   devs = sd.query_devices()
@@ -30,48 +29,57 @@ def send_udp(amp: float, client: udp_client.SimpleUDPClient):
      status.delete('1.0', tk.END)
      status.insert(tk.END, f"Client log: {e}", "center")
 
-async def send_ws(amp: float, client):
-    try:
-      msg = osc_message_builder.OscMessageBuilder(address = "/amp")
-      msg.add_arg(float(amp))
-      msg = msg.build()
-      bytes = msg.dgram
-      await client.send(bytes)
-    except Exception as e:
-      status.delete('1.0', tk.END)
-      status.insert(tk.END, f"Client log: {e}", "center") 
-
-CLIENT = None
-
+UDP_CLIENT = None
 def record(indata, frames, time, status):
-   global CLIENT
+   global UDP_CLIENT
+   then = t.time()
    data = np.linalg.norm(indata)
-   if isinstance(CLIENT, udp_client.SimpleUDPClient):
-    send_udp(data, CLIENT)
-   elif isinstance(CLIENT, WebSocketServerProtocol):
-    msg = osc_message_builder.OscMessageBuilder(address = "/amp")
-    msg.add_arg(float(data))
-    osc_m = msg.build()
-    bytes = osc_m.dgram
+   if isinstance(UDP_CLIENT, udp_client.SimpleUDPClient):
+    send_udp(float(data), UDP_CLIENT)
+   now = t.time()
+   elapsed = now - then
+   if elapsed < 1/60:
+      t.sleep(1/60 - elapsed)
 
-async def ws_loop(client):
+WS_DATA = 0.0
+# Interstep between UDP and WebSocket - giving data for the WebSocket handler
+def udp_handle(address, *args):
+ global WS_DATA
+ WS_DATA = args[0]
+
+async def ws_handle(websocket,path):
   while True:
-   await client.send(b'Hello world!')
+   ip, port = websocket.remote_address
+   try:
+    then = t.time()
+    global WS_DATA
+    osc = osc_message_builder.OscMessageBuilder(address="/amp")
+    osc.add_arg(WS_DATA)
+    msg = osc.build().dgram
+    await websocket.send(msg)
+    now = t.time()
+    elapsed = now - then
+    if elapsed < 1/60:
+      await asyncio.sleep(1/60 - elapsed)
+   except Exception as e:
+    status.delete('1.0', tk.END)
+    status.insert(tk.END, f"Server log: {e}", "center")
 
 def config(mode: str, host: str, port: int, input_device: str):
- global CLIENT
+ global UDP_CLIENT
+ UDP_CLIENT = udp_client.SimpleUDPClient(host, port)
  match mode:
-  case 'UDP':
-    CLIENT = udp_client.SimpleUDPClient(host, port)
   case 'WebSocket':
-    async def handler(websocket,path):
-        global CLIENT
-        ip, port = websocket.remote_address
-        CLIENT = websocket
-        await ws_loop(websocket)
-    start_server = ws.serve(handler, host, port) 
-    asyncio.get_event_loop().run_until_complete(start_server)
-    threading.Thread(target=asyncio.get_event_loop().run_forever).start()  
+    dispatcher = osc_server.Dispatcher()
+    dispatcher.map("/amp", udp_handle)
+    # Switching on the UDP server first to catch all incoming messages
+    u_server = osc_server.ThreadingOSCUDPServer((host,port), dispatcher)
+    threading.Thread(target=u_server.serve_forever).start()
+    # Then starting the WebSocket server
+    ws_server = ws.serve(ws_handle, host, port)
+    asyncio.get_event_loop().run_until_complete(ws_server)
+    threading.Thread(target=asyncio.get_event_loop().run_forever).start() 
+ # Main logic - starting recording and sending data to the server   
  threading.Thread(target=start_stream, args=(input_device,)).start()
  status.delete('1.0', tk.END)
  status.insert(tk.END, f"Sending to {mode} {host} and port {port}", "center")
