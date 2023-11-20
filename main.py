@@ -58,7 +58,7 @@ async def ws_handle(websocket,path):
     osc.add_arg(WS_DATA)
     msg = osc.build().dgram
     await websocket.send(msg)
-    now = t.time()
+    now = t.time()  
     elapsed = now - then
     if elapsed < 1/60:
       await asyncio.sleep(1/60 - elapsed)
