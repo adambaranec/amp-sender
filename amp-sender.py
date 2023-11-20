@@ -1,4 +1,5 @@
 # © Adam Baranec, 2023
+# Legacy code
 
 import sounddevice as sd 
 

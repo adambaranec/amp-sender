@@ -1,3 +1,5 @@
+# © Adam Baranec, 2023
+
 import asyncio
 import datetime
 import json
@@ -105,15 +107,15 @@ start_button = tk.Button(app, text="Start sending", command=lambda: config(MODE.
 #fps_label = tk.Label(text="FPS")
 #fps_settings = tk.Entry(app, textvariable=FPS, width=4, justify="center")
 server_type_settings = tk.ttk.Combobox(app, values=['UDP', 'WebSocket'], state="readonly", textvariable=MODE, width=9, justify="center")
-copyright = tk.Text(app)
+copyright = tk.Text(app, bg='gray')
 
 ip.insert(tk.END,'127.0.0.1')
 devsList.set(devices()[0])
 status.tag_configure("center", justify='center')
 #fps_settings.insert(tk.END,'60')
 server_type_settings.set('UDP')
-copyright.insert(INSERT, f'Copyright by Adam Baranec, {datetime.now().year}')
-copyright.config(status=DISABLED)
+copyright.insert(tk.INSERT, f'© Adam Baranec, {t.strftime("%Y")}', "center")
+copyright.tag_config("center", justify='center')
 
 devsList.pack()
 ipLabel.pack()
