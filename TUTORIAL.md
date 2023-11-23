@@ -2,7 +2,9 @@
 - When starting the app, choose an input from the list to record from (e.g. built-in microphone).
 - Set a host and a port to send messages.
 - Tip 1: If you would like to record sounds coming from your device (e.g. background music from Spotify), make necessary sound connections (for example with JACK in Linux) or simply configure a multi-output with a virtual audio cable (BlackHole 16ch etc.). Then, choose the cable as the input in Amp Sender.
--Tip 2: The host is by default set to localhost (127.0.0.1) - amplitude of current sounds is sent to an OSC receiver in the same computer. If the receiver is running in another computer, host has to be set to the IP address of the sender (computer where Amp Sender is running).
+- Tip 2: The host is by default set to localhost (127.0.0.1) - amplitude of current sounds is sent to an OSC receiver in the same computer. If the receiver is running in another computer, host has to be set to the IP address of the sender (computer where Amp Sender is running).
+
+![app screenshot](screenshot.png)
 
 ## Using Amp Sender with Hydra (overall JavaScript)
 Hydra itself is able to capture sound, but only from the default built-in microphone. Before using another device, read more.
